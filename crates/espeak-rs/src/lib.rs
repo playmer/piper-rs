@@ -15,7 +15,27 @@ const CLAUSE_INTONATION_FULL_STOP: i32 = 0x00000000;
 const CLAUSE_INTONATION_COMMA: i32 = 0x00001000;
 const CLAUSE_INTONATION_QUESTION: i32 = 0x00002000;
 const CLAUSE_INTONATION_EXCLAMATION: i32 = 0x00003000;
+const CLAUSE_INTONATION_NONE: i32 = 0x00004000;
+
+const CLAUSE_TYPE_NONE: i32 = 0x00000000;
+const CLAUSE_TYPE_EOF: i32 = 0x00010000;
+const CLAUSE_TYPE_VOICE_CHANGE: i32 = 0x00020000;
+const CLAUSE_TYPE_CLAUSE: i32 = 0x00040000;
 const CLAUSE_TYPE_SENTENCE: i32 = 0x00080000;
+
+const CLAUSE_NONE: i32 = (0 | CLAUSE_INTONATION_NONE | CLAUSE_TYPE_NONE);
+const CLAUSE_PARAGRAPH: i32 = (70 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE);
+const CLAUSE_EOF: i32 = (40 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE | CLAUSE_TYPE_EOF);
+const CLAUSE_VOICE: i32 = (0 | CLAUSE_INTONATION_NONE | CLAUSE_TYPE_VOICE_CHANGE);
+const CLAUSE_PERIOD: i32 = (40 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE);
+const CLAUSE_COMMA: i32 = (20 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE);
+const CLAUSE_SHORTCOMMA: i32 = (4 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE);
+const CLAUSE_SHORTFALL: i32 = (4 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE);
+const CLAUSE_QUESTION: i32 = (40 | CLAUSE_INTONATION_QUESTION | CLAUSE_TYPE_SENTENCE);
+const CLAUSE_EXCLAMATION: i32 = (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE);
+const CLAUSE_COLON: i32 = (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE);
+const CLAUSE_SEMICOLON: i32 = (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE);
+
 /// Name of the environment variable that points to the directory that contains `espeak-ng-data` directory
 /// only needed if `espeak-ng-data` directory is not in the expected location (i.e. eSpeak-ng is not installed system wide)
 const PIPER_ESPEAKNG_DATA_DIRECTORY: &str = "PIPER_ESPEAKNG_DATA_DIRECTORY";
@@ -95,6 +115,19 @@ pub fn text_to_phonemes(
     Ok(phonemes)
 }
 
+//const CLAUSE_NONE: i32 = (0 | CLAUSE_INTONATION_NONE | CLAUSE_TYPE_NONE);
+//const CLAUSE_PARAGRAPH: i32 = (70 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE);
+//const CLAUSE_EOF: i32 = (40 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE | CLAUSE_TYPE_EOF);
+//const CLAUSE_VOICE: i32 = (0 | CLAUSE_INTONATION_NONE | CLAUSE_TYPE_VOICE_CHANGE);
+//const CLAUSE_PERIOD: i32 = (40 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE);
+//const CLAUSE_COMMA: i32 = (20 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE);
+//const CLAUSE_SHORTCOMMA: i32 = (4 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE);
+//const CLAUSE_SHORTFALL: i32 = (4 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE);
+//const CLAUSE_QUESTION: i32 = (40 | CLAUSE_INTONATION_QUESTION | CLAUSE_TYPE_SENTENCE);
+//const CLAUSE_EXCLAMATION: i32 = (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE);
+//const CLAUSE_COLON: i32 = (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE);
+//const CLAUSE_SEMICOLON: i32 = (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE);
+
 pub fn _text_to_phonemes(
     text: &str,
     language: &str,
@@ -121,26 +154,30 @@ pub fn _text_to_phonemes(
     let mut phonemes = String::new();
     let mut text_c_char = rust_string_to_c(text) as *const ffi::c_char;
     let text_c_char_ptr = std::ptr::addr_of_mut!(text_c_char);
-    let terminator: ffi::c_int = 0;
+    let mut terminator: ffi::c_int = 0;
     while !text_c_char.is_null() {
         let ph_str = unsafe {
-            let res = espeak_rs_sys::espeak_TextToPhonemes(
+            let res = espeak_rs_sys::espeak_TextToPhonemesWithTerminator(
                 text_c_char_ptr as _,
                 espeak_rs_sys::espeakCHARS_UTF8.try_into().unwrap(),
                 phoneme_mode,
+                &mut terminator,
             );
             FfiStr::from_raw(res)
         };
         phonemes.push_str(&ph_str.into_string());
         let intonation = terminator & 0x0000F000;
+        //println!("intonation: {intonation}");
         if intonation == CLAUSE_INTONATION_FULL_STOP {
-            phonemes.push('.');
+            phonemes.push_str(". ");
         } else if intonation == CLAUSE_INTONATION_COMMA {
-            phonemes.push(',');
+            phonemes.push_str(", ");
         } else if intonation == CLAUSE_INTONATION_QUESTION {
-            phonemes.push('?');
+            phonemes.push_str("? ");
         } else if intonation == CLAUSE_INTONATION_EXCLAMATION {
-            phonemes.push('!');
+            phonemes.push_str("! ");
+        } else if (terminator & CLAUSE_SEMICOLON) == CLAUSE_SEMICOLON {
+            phonemes.push_str("; ");
         }
         if (terminator & CLAUSE_TYPE_SENTENCE) == CLAUSE_TYPE_SENTENCE {
             sent_phonemes.push(std::mem::take(&mut phonemes));
